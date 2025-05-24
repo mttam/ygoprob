@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Multivariate Hypergeometric Simulator</title>
+    <script src="https://cdn.jsdelivr.net/npm/numeric@1.2.6/numeric.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: linear-gradient(135deg, #1e3c72, #2a5298);
+            display: flex;
+            justify: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.2);
+            width: 100%;
+            max-width: 600px;
+            text-align: center;
+        }
+        .header, .deck-header {
+            display: flex;
+            justify-content: space-between;
+            font-weight: bold;
+            margin-bottom: 5px;
+            padding: 5px;
+        }
+        .card-entry {
+            display: flex;
+            gap: 5px;
+            margin-bottom: 10px;
+            justify-content: space-between;
+        }
+        .card-name {
+            flex: 2;
+        }
+        .min-draw, .max-draw, .total-in-deck {
+            flex: 1;
+            width: 50px;
+        }
+        input {
+            padding: 6px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            text-align: center;
+        }
+        input.error {
+            border: 2px solid red;
+        }
+        button {
+            background: #1e3c72;
+            color: white;
+            border: none;
+            padding: 8px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:disabled {
+            background: gray;
+            cursor: not-allowed;
+        }
+        button:hover:not(:disabled) {
+            background: #16395b;
+        }
+        #result {
+            font-size: 1.2em;
+            font-weight: bold;
+            padding: 10px;
+            border-radius: 5px;
+            display: inline-block;
+            margin-top: 15px;
+        }
+        #loading {
+            display: none;
+        }
+        .loading-container {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            margin: 15px 0;
+        }
+        .loading-icon {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #1e3c72;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+        }
+        #progress-text {
+            margin: 0;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>Multivariate Hypergeometric Simulator</h2>
+        <div class="header">
+            <span>Card Name</span>
+            <span>Min</span>
+            <span>Max</span>
+            <span>Total</span>
+        </div>
+        <div id="card-container">
+            <div class="card-entry">
+                <input type="text" placeholder="Card Name" class="card-name">
+                <input type="number" placeholder="Min" class="min-draw" min="0" oninput="validateInputs()">
+                <input type="number" placeholder="Max" class="max-draw" min="0" oninput="validateInputs()">
+                <input type="number" placeholder="Total" class="total-in-deck" min="0" oninput="validateInputs()">
+            </div>
+        </div>
+        <button onclick="addCardField()">+ Add Card</button>
+        <br><br>
+        <div class="deck-header">
+            <span>Total Cards in Deck</span>
+            <span>Hand Size</span>
+        </div>
+        <input type="number" id="total-cards" placeholder="Total cards in deck" min="1" value="40">
+        <input type="number" id="hand-size" placeholder="Hand size" min="1" value="5">
+        <br><br>
+        <button id="run-button" onclick="runSimulation()">Run Simulation</button>
+        <div id="loading" class="loading-container">
+            <div class="loading-icon"></div>
+            <p id="progress-text">Starting simulation...</p>
+        </div>
+        <div id="result"></div>
+    </div>
+
+    <script>
+        // Utility functions
+        function getColorForProbability(probability) {
+            let percentage = probability * 100;
+            if (percentage < 10) return "#ff4d4d";
+            if (percentage < 30) return "#ff9800";
+            if (percentage < 50) return "#ffeb3b";
+            return "#4caf50";
+        }
+
+        function validateInputs() {
+            let valid = true;
+            const totalCards = parseInt(document.getElementById("total-cards").value) || 0;
+            const handSize = parseInt(document.getElementById("hand-size").value) || 0;
+            let cardCount = 0;
+            
+            document.querySelectorAll(".card-entry").forEach(entry => {
+                const minDraw = entry.querySelector(".min-draw").value;
+                const maxDraw = entry.querySelector(".max-draw").value;
+                const totalInDeck = entry.querySelector(".total-in-deck").value;
+                
+                if (minDraw !== "" && maxDraw !== "" && parseInt(minDraw) > parseInt(maxDraw)) {
+                    entry.querySelector(".min-draw").classList.add("error");
+                    entry.querySelector(".max-draw").classList.add("error");
+                    valid = false;
+                } else {
+                    entry.querySelector(".min-draw").classList.remove("error");
+                    entry.querySelector(".max-draw").classList.remove("error");
+                }
+                
+                if (totalInDeck !== "" && !isNaN(parseInt(totalInDeck))) {
+                    cardCount++;
+                }
+            });
+
+            document.getElementById("run-button").disabled = !(valid && totalCards > 0 && handSize > 0 && cardCount > 0);
+        }
+
+        function addCardField() {
+            const container = document.getElementById("card-container");
+            const div = document.createElement("div");
+            div.className = "card-entry";
+            div.innerHTML = `
+                <input type="text" placeholder="Card Name" class="card-name">
+                <input type="number" placeholder="Min" class="min-draw" min="0" oninput="validateInputs()">
+                <input type="number" placeholder="Max" class="max-draw" min="0" oninput="validateInputs()">
+                <input type="number" placeholder="Total" class="total-in-deck" min="0" oninput="validateInputs()">
+                <button onclick="this.parentElement.remove(); validateInputs();">-</button>
+            `;
+            container.appendChild(div);
+            validateInputs();
+        }
+
+        // Main simulation function
+        async function bruteForceHypergeom(desiredCount, countRange, populationSize, handSize, trials = 100000) {
+            // Validate input
+            if (desiredCount.reduce((a, b) => a + b, 0) > populationSize) {
+                throw new Error("Sum of all category counts cannot exceed the total population size");
+            }
+
+            // Create deck with known objects
+            let deck = [];
+            for (let idx = 0; idx < desiredCount.length; idx++) {
+                deck.push(...Array(desiredCount[idx]).fill(idx));
+            }
+
+            // Fill the rest of the deck with "other" objects
+            const remainingCount = populationSize - desiredCount.reduce((a, b) => a + b, 0);
+            deck.push(...Array(remainingCount).fill(-1));
+
+            // Counter for successful draws
+            let successCount = 0;
+
+            for (let i = 0; i < trials; i++) {
+                // Update progress every 1000 trials
+                if (i % 1000 === 0) {
+                    const progress = Math.round((i / trials) * 100);
+                    document.getElementById("progress-text").textContent = `Simulation progress: ${progress}%`;
+                    // Allow UI to update
+                    await new Promise(resolve => setTimeout(resolve, 0));
+                }
+
+                // Randomly sample handSize elements from the deck
+                const shuffledDeck = [...deck].sort(() => Math.random() - 0.5);
+                const hand = shuffledDeck.slice(0, handSize);
+
+                // Count occurrences of each tracked object type
+                const handCount = new Array(desiredCount.length).fill(0);
+                for (const card of hand) {
+                    if (card >= 0 && card < desiredCount.length) {
+                        handCount[card]++;
+                    }
+                }
+
+                // Check if the drawn counts fall within the allowed ranges
+                let valid = true;
+                for (let j = 0; j < desiredCount.length; j++) {
+                    if (handCount[j] < countRange[j][0] || handCount[j] > countRange[j][1]) {
+                        valid = false;
+                        break;
+                    }
+                }
+
+                if (valid) {
+                    successCount++;
+                }
+            }
+
+            // Estimate probability
+            return successCount / trials;
+        }
+
+        async function runSimulation() {
+            try {
+                document.getElementById("loading").style.display = "flex";
+                document.getElementById("result").innerHTML = "";
+                document.getElementById("progress-text").textContent = "Starting simulation...";
+                
+                // Get input values
+                const cardEntries = document.querySelectorAll(".card-entry");
+                const cards = Array.from(cardEntries).map(entry => {
+                    return {
+                        name: entry.querySelector(".card-name").value || "Card",
+                        minDraw: parseInt(entry.querySelector(".min-draw").value) || 0,
+                        maxDraw: parseInt(entry.querySelector(".max-draw").value) || 0,
+                        totalInDeck: parseInt(entry.querySelector(".total-in-deck").value) || 0
+                    };
+                });
+
+                const totalCards = parseInt(document.getElementById("total-cards").value) || 40;
+                const handSize = parseInt(document.getElementById("hand-size").value) || 5;
+
+                // Prepare parameters for simulation
+                const desiredCount = cards.map(card => card.totalInDeck);
+                const countRange = cards.map(card => [card.minDraw, card.maxDraw]);
+
+                // Run simulation
+                const probability = await bruteForceHypergeom(desiredCount, countRange, totalCards, handSize);
+
+                // Display results
+                const percentage = (probability * 100).toFixed(4);
+                const color = getColorForProbability(probability);
+                document.getElementById("result").innerHTML = `
+                    Estimated probability: <span style="background-color: ${color}; color: white; padding: 5px; border-radius: 5px;">
+                    ${percentage}%</span>
+                `;
+            } catch (error) {
+                document.getElementById("result").innerHTML = `Error: ${error.message}`;
+            } finally {
+                document.getElementById("loading").style.display = "none";
+                document.getElementById("progress-text").textContent = "Simulation complete!";
+            }
+                // Initialize the page
+            window.onload = function() {
+                validateInputs();
+                document.getElementById("run-button").addEventListener("click", runSimulation);
+            }};
+    </script>
